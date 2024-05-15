@@ -16,7 +16,11 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
+from fews import views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('', views.home, name='home'),
+    path('upload/', views.upload_file, name='upload_file'),
+    path('upload/success/', views.upload_success, name='upload_success'),
 ]
