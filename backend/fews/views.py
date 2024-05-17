@@ -1,5 +1,6 @@
 import os
 import zipfile
+import requests
 from django.shortcuts import render, redirect
 from .forms import UploadFileForm
 from .models import FileRecord
@@ -29,7 +30,8 @@ def handle_tif_file(f, upload_dir):
 def save_file_record(file_path, file_name, ekstension):
     filesize = os.path.getsize(file_path)
     dir_name = os.path.dirname(file_path).replace('\\','/')
-
+    print("Directory name:", dir_name)
+    
     record = FileRecord(
         dir=dir_name,
         basename=file_name,
@@ -41,6 +43,35 @@ def save_file_record(file_path, file_name, ekstension):
     )
     record.save()
 
+def get_shapefile_paths(directory):
+    shapefile_paths = []
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            if file.endswith('.shp') or file.endswith('.tif'):
+                file_path = os.path.join(root, file).replace('\\', '/')
+                print("test path", file_path)
+                shapefile_paths.append((file_path, file))
+    return shapefile_paths
+
+workspace = "gsdb_simadu"
+geoserver_enpoint = "http://admin:geoserver@127.0.0.1:8080/geoserver"
+
+def upload_to_geoserver(data_path, file_name, workspace, store, geoserver_endpoint):
+    file_type = os.path.splitext(file_name)[1][1:]
+    print('test', file_type)
+    store_type = "datastores" if file_type == 'shp' else "coveragestores"
+    url = f"{geoserver_endpoint}/rest/workspaces/{workspace}/{store_type}/{store}/external.{file_type}"
+
+    with open(data_path, 'rb') as data:
+        headers = {"Content-type": "text/plain" if file_type == 'shp' else "image/tiff"}
+        response = requests.put(url, data=data, headers=headers)
+
+    if response.status_code == 201:
+        print(f"Successfully uploaded {file_name} to GeoServer.")
+    else:
+        print(f"Failed to upload {file_name} to GeoServer. Status code: {response.status_code}")
+        print(response.text)
+
 def handle_uploaded_file(f):
     if f.size > MAX_FILE_SIZE:
         return False
@@ -48,21 +79,26 @@ def handle_uploaded_file(f):
     try:
         if f.name.endswith('.zip'):
             extracted_dir = handle_zip_file(f, UPLOAD_DIR)
-            for root, dirs, files in os.walk(extracted_dir):
-                for file in files:
-                    if file.endswith('.shp'):
-                        file_path = os.path.join(root, file)
-                        save_file_record(file_path, file, os.path.splitext(file)[1])
-            return True
-        elif f.name.endswith('.tif'):
-            file_path = handle_tif_file(f, UPLOAD_DIR)
-            save_file_record(file_path, f.name, '.tif')
+            shapefile_paths = get_shapefile_paths(extracted_dir)
+
+            for file_path, file_name in shapefile_paths:
+                file_extension = os.path.splitext(file_name)[1]
+                save_file_record(file_path, file_name, file_extension)
+                if file_extension == '.shp' or file_extension == '.tif':
+                    global data_path
+                    global store
+                    data_path = file_path
+                    print("data path", data_path)
+                    store = os.path.splitext(file_name)[0]  # Using the basename without extension
+                    print("store", store)
+                upload_to_geoserver(file_path, file_name, workspace, store, geoserver_enpoint)
+
             return True
     except Exception as e:
         print(f"Error handling file: {e}")
         return False
 
-    return False  # unsupported file type
+    return False
 
 def upload_file(request):
     if request.method == 'POST':
