@@ -82,7 +82,7 @@ DATABASES = {
         'NAME': 'fews_satu_data',
         'USER': 'postgres',
         'PASSWORD': 'TanjungDuren',
-        'HOST': '127.0.0.1',
+        # 'HOST': '127.0.0.1',
         'PORT': '5432',
     }
 }
