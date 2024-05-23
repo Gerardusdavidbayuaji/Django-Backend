@@ -53,26 +53,32 @@ def upload_to_geoserver(file_path, file_type):
     store = os.path.splitext(basename)[0]  # Use basename as store name
     store_type = "datastores" if file_type == 'shp' else "coveragestores"
 
+    # URL of the file to be accessed by GeoServer
+    file_url = f"file://{file_path.replace(os.sep, '/')}"
+    
     # Construct URL for GeoServer REST API
     url = f"{geoserver_endpoint}/rest/workspaces/{workspace}/{store_type}/{store}/external.{file_type}"
 
-    # Read file content
-    with open(file_path, 'rb') as file:
-        data = file.read()
+    # Construct data payload for the PUT request
+    data = file_url
+    print("data to geoserver", data)
 
     # Make PUT request to GeoServer
     headers = {"Content-type": "text/plain"}
-    response = requests.put(url, data=data, headers=headers)
+    try:
+        response = requests.put(url, data=data, headers=headers)
+        response.raise_for_status()  # Will raise an HTTPError for bad responses
+    except requests.exceptions.RequestException as e:
+        print(f"HTTP request failed: {e}")
+        return False
 
     # Check if upload was successful
-    if response.status_code == 201:
-        print(f"Successful upload to geoserver: {file_path}")
-        # Perform actions upon successful upload
-        # For example, update FileRecord model
+    if response.status_code in (201, 202):
+        print(f"Successful upload to GeoServer: {file_path}")
+        return True
     else:
-        print(f"Failed upload to geoserver: {file_path}")
-        # Perform actions upon failed upload
-        # For example, log error or handle accordingly
+        print(f"Failed upload to GeoServer: {file_path}, Status Code: {response.status_code}, Response: {response.text}")
+        return False
 
 def upload_file(request):
     if request.method == 'POST':
