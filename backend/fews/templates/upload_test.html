@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>fews</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <style>
+      body,
+      html {
+        height: 100%;
+        margin: 0;
+      }
+      #map {
+        height: 100%;
+        width: 100%;
+      }
+    </style>
+  </head>
+  <body class="bg-zinc-900 flex flex-col">
+    <div
+      class="bg-gray-800 text-sm text-black flex-none flex items-center justify-between w-full px-4"
+    >
+      <form class="rounded-lg" method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="flex items-center py-4">
+          <div class="text-white">{{ form.file }}</div>
+          <button
+            type="submit"
+            class="bg-black text-white font-bold py-2 px-4 rounded ml-4"
+          >
+            Upload
+          </button>
+        </div>
+      </form>
+      <a
+        href="http://127.0.0.1:8080/geoserver/gsdb_simadu/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=gsdb_simadu:batas_provinsi&maxFeatures=50&outputFormat=shape-zip"
+        download
+        class="bg-black text-white font-bold py-2 px-4 rounded ml-4"
+      >
+        Download
+      </a>
+    </div>
+    <div id="map" class="flex-grow"></div>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        // const map = L.map("map").setView([-6.9147, 107.6098], 13); // Atur koordinat dan zoom level sesuai kebutuhan
+        const map = L.map("map").setView([-2.4833826, 117.8902853], 5);
+
+        L.tileLayer(
+          "https://api.maptiler.com/maps/satellite/{z}/{x}/{y}@2x.jpg?key=AW8IuG306IIk8kNdxEw6",
+          {
+            attribution:
+              '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          }
+        ).addTo(map);
+
+        function fetchDataFromWFS() {
+          fetch(
+            "http://127.0.0.1:8080/geoserver/gsdb_simadu/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=gsdb_simadu:batas_provinsi&maxFeatures=50&outputFormat=application/json"
+          )
+            .then((response) => response.json())
+            .then((data) => {
+              L.geoJSON(data, {
+                onEachFeature: function (feature, layer) {
+                  if (feature.properties && feature.properties.Provinsi) {
+                    layer.bindPopup(feature.properties.Provinsi);
+                  }
+                },
+              }).addTo(map);
+            });
+        }
+
+        // Panggil fungsi untuk menampilkan data WFS pada peta Leaflet
+        fetchDataFromWFS();
+      });
+
+      // function addWMSLayerToMap(url, layerName) {
+      //   const wmsLayer = L.tileLayer.wms(url, {
+      //     layers: `gsdb_simadu:${layerName}`,
+      //     format: "image/png",
+      //     transparent: true,
+      //   });
+
+      //   wmsLayer.addTo(map);
+      //   wmsLayer.on("tileerror", function (error, tile) {
+      //     console.error("Error loading WMS tile:", error, tile);
+      //   });
+      // }
+    </script>
+  </body>
+</html>

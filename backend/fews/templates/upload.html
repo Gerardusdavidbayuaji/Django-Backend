@@ -24,7 +24,12 @@
     <div
       class="bg-gray-800 text-sm text-black flex-none flex items-center justify-between w-full px-4"
     >
-      <form class="rounded-lg" method="post" enctype="multipart/form-data">
+      <form
+        id="uploadForm"
+        class="rounded-lg"
+        method="post"
+        enctype="multipart/form-data"
+      >
         {% csrf_token %}
         <div class="flex items-center py-4">
           <div class="text-white">{{ form.file }}</div>
@@ -37,7 +42,7 @@
         </div>
       </form>
       <a
-        href="URL_TO_YOUR_SHP_FILE"
+        href="http://127.0.0.1:8080/geoserver/gsdb_simadu/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=gsdb_simadu:batas_provinsi&maxFeatures=50&outputFormat=shape-zip"
         download
         class="bg-black text-white font-bold py-2 px-4 rounded ml-4"
       >
@@ -47,7 +52,7 @@
     <div id="map" class="flex-grow"></div>
     <script>
       document.addEventListener("DOMContentLoaded", function () {
-        const map = L.map("map").setView([-6.9147, 107.6098], 13); // Atur koordinat dan zoom level sesuai kebutuhan
+        const map = L.map("map").setView([-2.4833826, 117.8902853], 5);
 
         L.tileLayer(
           "https://api.maptiler.com/maps/satellite/{z}/{x}/{y}@2x.jpg?key=AW8IuG306IIk8kNdxEw6",
@@ -56,6 +61,99 @@
               '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
           }
         ).addTo(map);
+
+        function fetchDataFromWFS(url) {
+          fetch(url)
+            .then((response) => response.json())
+            .then((data) => {
+              L.geoJSON(data, {
+                onEachFeature: function (feature, layer) {
+                  if (feature.properties && feature.properties.Provinsi) {
+                    layer.bindPopup(feature.properties.Provinsi);
+                  }
+                },
+              }).addTo(map);
+            })
+            .catch((error) => {
+              console.error("Error fetching WFS data:", error);
+            });
+        }
+
+        function addWMSLayerToMap(layerName) {
+          const wmsUrl = "http://127.0.0.1:8080/geoserver/gsdb_simadu/wms";
+          const wmsLayer = L.tileLayer.wms(wmsUrl, {
+            layers: `gsdb_simadu:${layerName}`,
+            format: "image/png",
+            transparent: true,
+            styles: "gsdb_simadu:curah_hujan_jawa",
+          });
+
+          wmsLayer.addTo(map);
+          wmsLayer.on("tileerror", function (error, tile) {
+            console.error("Error loading WMS tile:", error, tile);
+          });
+
+          map.on("click", function (e) {
+            const urlGetMapWMS = `${wmsUrl}?&service=WMS
+              &version=1.1.0
+              &request=GetFeatureInfo
+              &layers=gsdb_simadu:${layerName}
+              &query_layers=gsdb_simadu:${layerName}
+              &info_format=application/json
+              &SRS=EPSG:4326
+              &bbox=${map.getBounds().toBBoxString()}
+              &width=${map.getSize().x}
+              &height=${map.getSize().y}
+              &x=${e.containerPoint.x}
+              &y=${e.containerPoint.y}`;
+
+            fetch(urlGetMapWMS)
+              .then((response) => response.json())
+              .then((data) => {
+                // Proses data GetFeatureInfo di sini
+                console.log(data);
+              })
+              .catch((error) => {
+                console.error("Error fetching GetFeatureInfo data:", error);
+              });
+          });
+        }
+
+        function getUrlFromUploadedData(uploadedData) {
+          const wfsUrl = uploadedData.urls.wfs;
+          console.log("WFS URL:", wfsUrl);
+          const wmsUrl = uploadedData.urls.wms_style;
+          console.log("WMS URL:", wmsUrl);
+          const layerName = uploadedData.layerName;
+          console.log("Layer Name:", layerName);
+          fetchDataFromWFS(wfsUrl);
+          addWMSLayerToMap(layerName);
+        }
+
+        document
+          .getElementById("uploadForm")
+          .addEventListener("submit", function (e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+
+            fetch("{% url 'upload_file' %}", {
+              method: "POST",
+              body: formData,
+            })
+              .then((response) => response.json())
+              .then((data) => {
+                if (data.status === "success") {
+                  data.geoserver_urls.forEach((item) => {
+                    getUrlFromUploadedData(item);
+                  });
+                } else {
+                  console.error("Upload failed");
+                }
+              })
+              .catch((error) => {
+                console.error("Error during file upload:", error);
+              });
+          });
       });
     </script>
   </body>
