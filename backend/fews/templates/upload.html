@@ -1,14 +1,62 @@
-<!-- templates/upload.html -->
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Upload file</title>
+    <title>fews</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <style>
+      body,
+      html {
+        height: 100%;
+        margin: 0;
+      }
+      #map {
+        height: 100%;
+        width: 100%;
+      }
+    </style>
   </head>
-  <body>
-    <h1>Upload file</h1>
-    <form method="post" enctype="multipart/form-data">
-      {% csrf_token %} {{ form.as_p }}
-      <button type="submit">Upload</button>
-    </form>
+  <body class="bg-zinc-900 flex flex-col">
+    <div
+      class="bg-gray-800 text-sm text-black flex-none flex items-center justify-between w-full px-4"
+    >
+      <form class="rounded-lg" method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="flex items-center py-4">
+          <div class="text-white">{{ form.file }}</div>
+          <button
+            type="submit"
+            class="bg-black text-white font-bold py-2 px-4 rounded ml-4"
+          >
+            Upload
+          </button>
+        </div>
+      </form>
+      <a
+        href="URL_TO_YOUR_SHP_FILE"
+        download
+        class="bg-black text-white font-bold py-2 px-4 rounded ml-4"
+      >
+        Download
+      </a>
+    </div>
+    <div id="map" class="flex-grow"></div>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        const map = L.map("map").setView([-6.9147, 107.6098], 13); // Atur koordinat dan zoom level sesuai kebutuhan
+
+        L.tileLayer(
+          "https://api.maptiler.com/maps/satellite/{z}/{x}/{y}@2x.jpg?key=AW8IuG306IIk8kNdxEw6",
+          {
+            attribution:
+              '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          }
+        ).addTo(map);
+      });
+    </script>
   </body>
 </html>
