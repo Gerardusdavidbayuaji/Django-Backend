@@ -29,11 +29,11 @@ def process_zip_files(directory):
                     if file.endswith('.shp'):
                         shp_path = file_path.replace('\\', '/')
                         if upload_to_geoserver(shp_path, "shp"):
-                            uploaded_files.append(shp_path)
+                            uploaded_files.append((shp_path, "shp"))
                     elif file.endswith('.tif'):
                         tif_path = file_path.replace('\\', '/')
                         if upload_to_geoserver(tif_path, "geotiff"):
-                            uploaded_files.append(tif_path)
+                            uploaded_files.append((tif_path, "geotiff"))
 
     repository_path = 'C:\\GD\\1_Testing\\upload_fews\\backend\\fews\\repository'
     for filename in os.listdir(repository_path):
@@ -41,7 +41,7 @@ def process_zip_files(directory):
             tif_path = os.path.join(repository_path, filename)
             tif_path = tif_path.replace('\\', '/')
             if upload_to_geoserver(tif_path, "geotiff"):
-                uploaded_files.append(tif_path)
+                uploaded_files.append((tif_path, "geotiff"))
                 
     return uploaded_files
 
@@ -95,8 +95,9 @@ def get_url_geoserver(geoserver_endpoint, workspace, store):
         "wfs": f"{geoserver_endpoint}/{workspace}/ows?service=WFS&version=1.0.0&request=GetFeature&typeName={workspace}:{store}&outputFormat=application/json",
         "data_vektor": f"{geoserver_endpoint}/{workspace}/ows?service=WFS&version=1.0.0&request=GetFeature&typeName={workspace}:{store}&outputFormat=shape-zip",
         "data_raster": f"{geoserver_endpoint}/{workspace}/wms?service=WMS&version=1.1.0&request=GetMap&layers={workspace}:{store}&{params}&format=image/geotiff", 
-        "wms_style": f"{geoserver_endpoint}/{workspace}/wms?service=WMS&version=1.1.0&request=GetMap&layers={workspace}:{store}&styles=gsdb_simadu:curah_hujan_jawa&{params}&format=image/png",  
+        "wms_style": f"{geoserver_endpoint}/{workspace}/wms?service=WMS&version=1.1.0&request=GetMap&layers={workspace}:{store}&styles=gsdb_simadu:curah_hujan_id&{params}&format=image/png",  
     }
+    print("url:", url_geoserver)
     return url_geoserver
 
 def upload_file(request):
@@ -123,14 +124,14 @@ def upload_file(request):
             uploaded_files = process_zip_files('C:\\GD\\1_Testing\\upload_fews\\backend\\fews\\repository')
 
             geoserver_urls = []
-            for file in uploaded_files:
+            for file, file_type in uploaded_files:
                 basename = os.path.basename(file)
                 store = os.path.splitext(basename)[0]
                 url_geoserver = get_url_geoserver("http://127.0.0.1:8080/geoserver", "gsdb_simadu", store)
-                # Pass layer name to the response
                 geoserver_urls.append({
                     "file": file,
-                    "layerName": store,  # Include the layer name in the response
+                    "file_type": file_type,  # Include file type in the response
+                    "layerName": store,
                     "urls": url_geoserver
                 })
 
@@ -139,7 +140,6 @@ def upload_file(request):
     else:
         form = UploadFileForm()
     return render(request, 'upload.html', {'form': form})
-
 
 def home(request):
     return render(request, 'home.html')
