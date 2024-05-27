@@ -61,17 +61,58 @@
     <div id="map" class="flex-grow"></div>
     <script>
       document.addEventListener("DOMContentLoaded", function () {
-        const map = L.map("map").setView([-2.4833826, 117.8902853], 5);
+        const map = initializeMap();
 
-        L.tileLayer(
-          "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
-          {
-            attribution:
-              '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors | ' +
-              'Tiles &copy; <a href="https://www.arcgis.com/home/item.html?id=59e909b4e0b04c4a81e05f0f3cbb9360">ArcGIS</a> | ' +
-              "GeoServer",
-          }
-        ).addTo(map);
+        document
+          .getElementById("uploadForm")
+          .addEventListener("submit", handleFileUpload);
+        document
+          .getElementById("downloadCheckbox")
+          .addEventListener("change", toggleDownloadLink);
+
+        function initializeMap() {
+          const map = L.map("map").setView([-2.4833826, 117.8902853], 5);
+          L.tileLayer(
+            "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+            {
+              attribution:
+                '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors | ' +
+                'Tiles &copy; <a href="https://www.arcgis.com/home/item.html?id=59e909b4e0b04c4a81e05f0f3cbb9360">ArcGIS</a> | ' +
+                "GeoServer",
+            }
+          ).addTo(map);
+          return map;
+        }
+
+        function handleFileUpload(event) {
+          event.preventDefault();
+          const formData = new FormData(this);
+
+          axios
+            .post("{% url 'upload_file' %}", formData)
+            .then((response) => {
+              const data = response.data;
+              if (data.status === "success") {
+                processUploadedData(data);
+                showDownloadSection(
+                  formData.get("file").name,
+                  data.geoserver_urls
+                );
+              } else {
+                console.error("Upload failed");
+              }
+            })
+            .catch((error) => {
+              console.error("Error during file upload:", error);
+            });
+        }
+
+        function processUploadedData(data) {
+          data.geoserver_urls.forEach((item) => {
+            fetchDataFromWFS(item.urls.wfs);
+            addWMSLayerToMap(item.layerName);
+          });
+        }
 
         function fetchDataFromWFS(url) {
           axios
@@ -105,102 +146,68 @@
           });
 
           map.on("click", function (e) {
-            const urlGetMapWMS = `${wmsUrl}?service=WMS
-                  &version=1.1.1
-                  &request=GetFeatureInfo
-                  &layers=gsdb_simadu:${layerName}
-                  &query_layers=gsdb_simadu:${layerName}
-                  &info_format=application/json
-                  &SRS=EPSG:4326
-                  &bbox=${map.getBounds().toBBoxString()}
-                  &width=${map.getSize().x}
-                  &height=${map.getSize().y}
-                  &x=${map.latLngToContainerPoint(e.latlng).x}
-                  &y=${map.latLngToContainerPoint(e.latlng).y}`;
-
-            axios
-              .get(urlGetMapWMS)
-              .then(function (response) {
-                const jsonresponse = response.data;
-                const rainFallIndex =
-                  jsonresponse.features[0].properties.GRAY_INDEX;
-                const rainFallIndexFixed = rainFallIndex.toFixed(3);
-
-                L.popup()
-                  .setLatLng(e.latlng)
-                  .setContent(
-                    "Index curah hujan: " + rainFallIndexFixed + " mm"
-                  )
-                  .openOn(map);
-              })
-              .catch(function (error) {
-                console.error("Error fetching WMS data:", error);
-              });
+            fetchWMSData(e, wmsUrl, layerName);
           });
         }
 
-        function getUrlFromUploadedData(uploadedData) {
-          const wfsUrl = uploadedData.urls.wfs;
-          const wmsUrl = uploadedData.urls.wms_style;
-          const layerName = uploadedData.layerName;
-          fetchDataFromWFS(wfsUrl);
-          addWMSLayerToMap(layerName);
+        function fetchWMSData(event, wmsUrl, layerName) {
+          const urlGetMapWMS = `${wmsUrl}?service=WMS&version=1.1.1&request=GetFeatureInfo&layers=gsdb_simadu:${layerName}&query_layers=gsdb_simadu:${layerName}&info_format=application/json&SRS=EPSG:4326&bbox=${map
+            .getBounds()
+            .toBBoxString()}&width=${map.getSize().x}&height=${
+            map.getSize().y
+          }&x=${map.latLngToContainerPoint(event.latlng).x}&y=${
+            map.latLngToContainerPoint(event.latlng).y
+          }`;
+
+          axios
+            .get(urlGetMapWMS)
+            .then((response) => {
+              const rainFallIndex =
+                response.data.features[0].properties.GRAY_INDEX.toFixed(3);
+              L.popup()
+                .setLatLng(event.latlng)
+                .setContent("Index curah hujan: " + rainFallIndex + " mm")
+                .openOn(map);
+            })
+            .catch((error) => {
+              console.error("Error fetching WMS data:", error);
+            });
         }
 
-        document
-          .getElementById("uploadForm")
-          .addEventListener("submit", function (e) {
-            e.preventDefault();
-            const formData = new FormData(this);
+        function showDownloadSection(filename, geoserverUrls) {
+          const downloadLinkElement = document.getElementById("downloadLink");
+          document.getElementById("filenameLabel").textContent = filename;
+          document.getElementById("downloadSection").style.display = "flex";
 
-            axios
-              .post("{% url 'upload_file' %}", formData)
-              .then((response) => {
-                const data = response.data;
-                if (data.status === "success") {
-                  let downloadLink = "";
-                  data.geoserver_urls.forEach((item) => {
-                    getUrlFromUploadedData(item);
-                    // Determine the download link based on file type
-                    if (item.file_type === "shp") {
-                      downloadLink = item.urls.data_vektor;
-                    } else if (item.file_type === "geotiff") {
-                      downloadLink = item.urls.data_raster;
-                    }
-                  });
-                  // Display the filename and enable the download section
-                  document.getElementById("filenameLabel").textContent =
-                    formData.get("file").name;
-                  const downloadLinkElement =
-                    document.getElementById("downloadLink");
-                  downloadLinkElement.href = downloadLink;
-                  document.getElementById("downloadSection").style.display =
-                    "flex";
-                } else {
-                  console.error("Upload failed");
-                }
-              })
-              .catch((error) => {
-                console.error("Error during file upload:", error);
-              });
-          });
-
-        document
-          .getElementById("downloadCheckbox")
-          .addEventListener("change", function () {
-            const downloadLink = document.getElementById("downloadLink");
-            if (this.checked) {
-              downloadLink.style.pointerEvents = "auto";
-              downloadLink.classList.remove("cursor-not-allowed");
-              downloadLink.classList.add("bg-blue-500");
-              downloadLink.classList.remove("bg-black");
-            } else {
-              downloadLink.style.pointerEvents = "none";
-              downloadLink.classList.add("cursor-not-allowed");
-              downloadLink.classList.add("bg-black");
-              downloadLink.classList.remove("bg-blue-500");
+          geoserverUrls.forEach((item) => {
+            if (item.file_type === "shp") {
+              downloadLinkElement.href = item.urls.data_vektor;
+            } else if (item.file_type === "geotiff") {
+              downloadLinkElement.href = item.urls.data_raster;
             }
           });
+        }
+
+        function toggleDownloadLink() {
+          const downloadLink = document.getElementById("downloadLink");
+          if (this.checked) {
+            enableDownloadLink(downloadLink);
+          } else {
+            disableDownloadLink(downloadLink);
+          }
+        }
+
+        function enableDownloadLink(downloadLink) {
+          downloadLink.style.pointerEvents = "auto";
+          downloadLink.classList.remove("cursor-not-allowed", "bg-black");
+          downloadLink.classList.add("bg-blue-500");
+        }
+
+        function disableDownloadLink(downloadLink) {
+          downloadLink.style.pointerEvents = "none";
+          downloadLink.classList.add("cursor-not-allowed", "bg-black");
+          downloadLink.classList.remove("bg-blue-500");
+        }
       });
     </script>
   </body>
