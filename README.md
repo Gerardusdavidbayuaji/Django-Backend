@@ -51,4 +51,4 @@ Web Map Service
 ![App Screenshot #1](assets\web_map_service.gif)
 
 Web Feature Service
-![App Screenshot #1](assets\web_feature_service.gif)
+![App Screenshot #2](assets\web_feature_service.gif)
